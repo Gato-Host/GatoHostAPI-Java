@@ -15,7 +15,16 @@ public class TestGetUserInfo {
         GatoHostAPI api = new GatoHostAPI(config.get("baseURL").getAsString(), config.get("key").getAsString());
         GatoHostAPI.GetUserInfoQuery query = new GatoHostAPI.GetUserInfoQuery();
         GatoHostAPI.GetUserInfoResponse execute = api.execute(query);
-        System.out.println("Display Name: " + execute.getDisplayName());
+        System.out.println("Domain ID: " + execute.getDomainID());
+        GatoHostAPI.DomainListQuery domainListQuery = new GatoHostAPI.DomainListQuery();
+        GatoHostAPI.DomainListResponse domainListResponse = api.execute(domainListQuery);
+        for (GatoHostAPI.GatoDomain domain : domainListResponse.getDomains()) {
+            if (domain.getId().equalsIgnoreCase(execute.getDomainID())) {
+                System.out.println("Domain Name: " + domain.getName());
+                return;
+            }
+        }
+        System.out.println("Domain Information Not Found!");
     }
 
 }

@@ -1,7 +1,8 @@
 package club.novaclient.gatohost;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
 import okhttp3.*;
@@ -12,40 +13,38 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GatoHostAPI {
 
 //    private final String key;
     private final String key;
     private final String baseUrl;
+    public static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
 
     private static final String apiVersion = "v2";
 
     private OkHttpClient httpClient;
     private Gson gson;
 
-    public GatoHostAPI(String key) throws IOException {
+    public GatoHostAPI(String key) {
         this("https://gato.host", key);
     }
-    public GatoHostAPI(String baseUrl, String key) throws IOException {
+    public GatoHostAPI(String baseUrl, String key) {
         this.key = key;
         this.baseUrl = baseUrl;
         this.httpClient = new OkHttpClient();
         this.gson = new Gson();
     }
 
-    public <T extends GatoResponse> T execute(GatoQuery<T> query) {
+    public <T extends GatoResponse> T execute(GatoQuery<T> query) throws IOException {
         return query.execute(this);
     }
 
-
-
-    /////////////////////////////
-    public static final MediaType JSON
-            = MediaType.parse("application/json; charset=utf-8");
-
     public abstract static class GatoQuery<ReturnType extends GatoResponse> {
-        private final Class<ReturnType> responseType;
+        final Class<ReturnType> responseType;
 
 
         GatoQuery(Class<ReturnType> responseType) {
@@ -56,22 +55,17 @@ public class GatoHostAPI {
             return null;
         }
 
-        private Response executeAndGetRawResponse(GatoHostAPI api) {
+        protected Response executeAndGetRawResponse(GatoHostAPI api) throws IOException {
             Response response = null;
-            try {
-                response = api.httpClient.newCall(getHttpRequest(api)).execute();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            response = api.httpClient.newCall(getHttpRequest(api)).execute();
             return response;
         }
 
-        private ReturnType execute(GatoHostAPI api){
+        protected ReturnType execute(GatoHostAPI api) throws IOException {
             Response response = executeAndGetRawResponse(api);
             ReturnType parsedResponse = null;
             try {
                 String string = response.body().string();
-                System.out.println(string);
                 parsedResponse = api.gson.fromJson(string, responseType);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -362,9 +356,9 @@ public class GatoHostAPI {
         }
 
         /**
-         * Get the domain name
+         * Get the domain ID
          */
-        public String getDomain() {
+        public String getDomainID() {
             return imageUrl;
         }
 
@@ -426,7 +420,7 @@ public class GatoHostAPI {
              * Create new SetUserInfoBody
              * @param embedtitle Embed title
              * @param authormessage Author text field
-             * @param domain Domain
+             * @param domainID Domain ID
              * @param iscustomembed True if custom embed enabled
              * @param domainprefix Subdomain
              * @param sitename Site name in discord's embed field
@@ -434,10 +428,10 @@ public class GatoHostAPI {
              * @param embedmessage Discord embed's Message
              * @param fakeurl Fake URL that will glitch discord client
              */
-            public SetUserInfoBody(String domainprefix, String domain, String colorcode, Boolean iscustomembed, String embedmessage, String authormessage, String sitename, String embedtitle, String fakeurl) {
+            public SetUserInfoBody(String domainprefix, String domainID, String colorcode, Boolean iscustomembed, String embedmessage, String authormessage, String sitename, String embedtitle, String fakeurl) {
                 super();
                 this.domainprefix = domainprefix;
-                this.domain = domain;
+                this.domain = domainID;
                 this.colorcode = colorcode;
                 this.iscustomembed = iscustomembed;
                 this.embedmessage = embedmessage;
@@ -449,9 +443,9 @@ public class GatoHostAPI {
         }
 
         private final SetUserInfoBody body;
-        private SetUserInfoQuery(String domainprefix, String domain, String colorcode, Boolean iscustomembed, String embedmessage, String authormessage, String sitename, String embedtitle, String fakeurl) {
+        private SetUserInfoQuery(String domainprefix, String domainID, String colorcode, Boolean iscustomembed, String embedmessage, String authormessage, String sitename, String embedtitle, String fakeurl) {
             super(SetUserInfoResponse.class);
-            body = new SetUserInfoBody(domainprefix, domain, colorcode, iscustomembed, embedmessage, authormessage, sitename, embedtitle, fakeurl);
+            body = new SetUserInfoBody(domainprefix, domainID, colorcode, iscustomembed, embedmessage, authormessage, sitename, embedtitle, fakeurl);
         }
 
         @Override
@@ -465,7 +459,7 @@ public class GatoHostAPI {
 
         public static class Builder {
             private String domainprefix;
-            private String domain;
+            private String domainID;
             private String colorcode;
             private Boolean iscustomembed;
             private String embedmessage;
@@ -480,11 +474,11 @@ public class GatoHostAPI {
              * Constructor of builder class
              * @param api For getting user info
              */
-            public Builder(GatoHostAPI api) {
+            public Builder(GatoHostAPI api) throws IOException {
                 GetUserInfoQuery query = new GetUserInfoQuery();
                 userInfo = api.execute(query);
                 domainprefix = userInfo.getSubDomain();
-                domain = userInfo.getDomain();
+                domainID = userInfo.getDomainID();
                 colorcode = userInfo.getEmbedColor();
                 iscustomembed = userInfo.isDiscordEmbedEnabled();
                 embedmessage = userInfo.getEmbedMessage();
@@ -499,8 +493,12 @@ public class GatoHostAPI {
                 this.domainprefix = subdomain;
                 return this;
             }
-            public Builder domain(String domain) {
-                this.domain = domain;
+            public Builder domain(GatoDomain domain) {
+                this.domainID = domain.getId();
+                return this;
+            }
+            public Builder domain(String domainID) {
+                this.domainID = domainID;
                 return this;
             }
             public Builder colorcode(String colorcode) {
@@ -533,7 +531,7 @@ public class GatoHostAPI {
             }
 
             public SetUserInfoQuery build() {
-                return new SetUserInfoQuery(domainprefix, domain, colorcode, iscustomembed, embedmessage, authormessage, sitename, embedtitle, fakeurl);
+                return new SetUserInfoQuery(domainprefix, domainID, colorcode, iscustomembed, embedmessage, authormessage, sitename, embedtitle, fakeurl);
             }
         }
     }
@@ -602,6 +600,94 @@ public class GatoHostAPI {
                 }
             }
             return null;
+        }
+    }
+
+    public static class DomainListQuery extends GatoQuery<DomainListResponse> {
+        public DomainListQuery() {
+            super(DomainListResponse.class);
+        }
+
+        @Override
+        protected Request getHttpRequest(GatoHostAPI api)  {
+            return new Request.Builder()
+                    .url(api.baseUrl + "/api/" + apiVersion + "/getdomains")
+                    .get()
+                    .build();
+        }
+
+        @Override
+        protected DomainListResponse execute(GatoHostAPI api) throws IOException {
+            Response response = executeAndGetRawResponse(api);
+            DomainListResponse parsedResponse = null;
+            try {
+                String string = response.body().string();
+                ArrayList<GatoDomain> domains = new ArrayList<>();
+                for (JsonElement element : api.gson.fromJson(string, JsonArray.class)) {
+                    domains.add(new GatoDomain(element.getAsJsonObject().get("domains").getAsString(), element.getAsJsonObject().get("_id").getAsString()));
+                }
+                parsedResponse = new DomainListResponse(domains);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return parsedResponse;
+        }
+    }
+    public static class DomainListResponse extends GatoResponse {
+        private final List<GatoDomain> domains;
+        protected DomainListResponse(List<GatoDomain> domains) {
+            this.domains = new ArrayList<>(domains);
+        }
+
+        /**
+         * Get all domains
+         */
+        public GatoDomain[] getDomains() {
+            return new ArrayList<>(domains).toArray(new GatoDomain[0]);
+        }
+    }
+
+    public static class GatoDomain {
+        @SerializedName("domains")
+        private String name;
+        @SerializedName("_id")
+        private String id;
+
+        /**
+         * Empty domain. For Gson to create new instance. You can use it but unsafe.
+         */
+        @Deprecated
+        private GatoDomain() {
+
+        }
+
+        /**
+         * Custom domain. But it won't work.
+         * @param name Domain name. E.g. behind-you.ninja
+         * @param id ID of the domain. E.g. 6064a643b775b2fffe7cfeab
+         */
+        public GatoDomain(String name, String id) {
+            this.name = name;
+            this.id = id;
+        }
+
+        /**
+         * Get the domain name. For example: behind-you.ninja
+         */
+        public String getName() {
+            return name;
+        }
+
+        /**
+         * Get the domain ID that uses in GatoHost Server and Requests. For example: 6064a643b775b2fffe7cfeab
+         */
+        public String getId() {
+            return id;
+        }
+
+        @Override
+        public String toString() {
+            return getName();
         }
     }
 
